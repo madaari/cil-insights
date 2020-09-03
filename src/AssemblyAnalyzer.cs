@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
@@ -16,12 +17,22 @@ namespace CILInsights
     public class AssemblyAnalyzer
     {
         /// <summary>
-        /// Set of assemblies to analyze
+        /// Report with insights from the analysis.
+        /// </summary>
+        private readonly Report Report;
+
+        /// <summary>
+        /// The path to the directory containing the assemblies to analyze.
+        /// </summary>
+        private readonly string AssemblyDir;
+
+        /// <summary>
+        /// Set of assemblies to analyze.
         /// </summary>
         private readonly HashSet<string> AssemblyPaths;
 
         /// <summary>
-        /// List of assemblies that are not allowed to be rewritten.
+        /// Set of assemblies that are not allowed to be rewritten.
         /// </summary>
         private readonly HashSet<string> DisallowedAssemblies;
 
@@ -33,9 +44,12 @@ namespace CILInsights
         /// <summary>
         /// Initializes a new instance of the <see cref="AssemblyAnalyzer"/> class.
         /// </summary>
-        private AssemblyAnalyzer(HashSet<string> assemblyPaths)
+        private AssemblyAnalyzer(string assemblyDir, HashSet<string> assemblyPaths)
         {
+            this.Report = new Report();
+            this.AssemblyDir = assemblyDir;
             this.AssemblyPaths = assemblyPaths;
+
             this.DisallowedAssemblies = new HashSet<string>()
             {
                 "Microsoft.Coyote.dll",
@@ -46,16 +60,17 @@ namespace CILInsights
 
             this.Passes = new List<AssemblyAnalysis>()
             {
-                 new TaskAnalysis()
+                 new TestFrameworkAnalysis(this.Report)
+                 //new TaskAnalysis(this.Report)
             };
         }
 
         /// <summary>
         /// Runs the analyzer.
         /// </summary>
-        public static void Run(HashSet<string> assemblyPaths)
+        public static void Run(string assemblyDir, HashSet<string> assemblyPaths)
         {
-            var analyzer = new AssemblyAnalyzer(assemblyPaths);
+            var analyzer = new AssemblyAnalyzer(assemblyDir, assemblyPaths);
             analyzer.Analyze();
         }
 
@@ -73,9 +88,18 @@ namespace CILInsights
                 catch (Exception ex)
                 {
                     Console.Error.WriteLine(ex);
-                    throw;
                 }
             }
+
+            var options = new JsonSerializerOptions
+            {
+                WriteIndented = true
+            };
+
+            string reportFile = $"{Path.Combine(this.AssemblyDir, "cil.insights.json")}";
+            Console.WriteLine($"... Writing the gathered insights to '{reportFile}'");
+            string report = JsonSerializer.Serialize(this.Report, options);
+            File.WriteAllText(reportFile, report);
         }
 
         /// <summary>
@@ -98,11 +122,10 @@ namespace CILInsights
 
             Console.WriteLine($"... Analyzing the '{assemblyName}' assembly ({assembly.FullName})");
 
-
             foreach (var analysis in this.Passes)
             {
                 // Traverse the assembly to apply each transformation pass.
-                Console.WriteLine($"..... Applying the '{analysis.GetType().Name}' analysis");
+                Debug.WriteLine($"..... Applying the '{analysis.GetType().Name}' analysis");
                 foreach (var module in assembly.Modules)
                 {
                     VisitModule(module, analysis);
@@ -117,7 +140,7 @@ namespace CILInsights
         /// </summary>
         private static void VisitModule(ModuleDefinition module, AssemblyAnalysis analysis)
         {
-            Console.WriteLine($"....... Module: {module.Name} ({module.FileName})");
+            Debug.WriteLine($"....... Module: {module.Name} ({module.FileName})");
             analysis.VisitModule(module);
             foreach (var type in module.GetTypes())
             {
@@ -130,11 +153,11 @@ namespace CILInsights
         /// </summary>
         private static void VisitType(TypeDefinition type, AssemblyAnalysis analysis)
         {
-            Console.WriteLine($"......... Type: {type.FullName}");
+            Debug.WriteLine($"......... Type: {type.FullName}");
             analysis.VisitType(type);
             foreach (var field in type.Fields)
             {
-                Console.WriteLine($"........... Field: {field.FullName}");
+                Debug.WriteLine($"........... Field: {field.FullName}");
                 analysis.VisitField(field);
             }
 
@@ -154,7 +177,7 @@ namespace CILInsights
                 return;
             }
 
-            Console.WriteLine($"........... Method {method.FullName}");
+            Debug.WriteLine($"........... Method {method.FullName}");
             analysis.VisitMethod(method);
 
             // Only non-abstract method bodies can be analyzed.
@@ -199,7 +222,7 @@ namespace CILInsights
         /// </summary>
         private AssemblyDefinition OnResolveAssemblyFailure(object sender, AssemblyNameReference reference)
         {
-            Console.Error.WriteLine("Error resolving assembly: " + reference.FullName);
+            Debug.WriteLine("Error resolving assembly: " + reference.FullName);
             return null;
         }
     }

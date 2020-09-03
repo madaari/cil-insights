@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,27 +12,26 @@ using Mono.Cecil.Cil;
 
 namespace CILInsights
 {
-    internal class TaskAnalysis : AssemblyAnalysis
+    internal class TestFrameworkAnalysis : AssemblyAnalysis
     {
         /// <summary>
-        /// The current module being transformed.
+        /// Known attributes declaring a unit test.
         /// </summary>
-        private ModuleDefinition Module;
+        private readonly Dictionary<string, string> KnownUnitTestFrameworks;
 
         /// <summary>
-        /// The current type being transformed.
+        /// Initializes a new instance of the <see cref="TestFrameworkAnalysis"/> class.
         /// </summary>
-        private TypeDefinition TypeDef;
-
-        /// <summary>
-        /// The current method being transformed.
-        /// </summary>
-        private MethodDefinition Method;
-
-        /// <summary>
-        /// A helper class for editing method body.
-        /// </summary>
-        private ILProcessor Processor;
+        internal TestFrameworkAnalysis(Report report)
+            : base(report)
+        {
+            this.KnownUnitTestFrameworks = new Dictionary<string, string>();
+            this.KnownUnitTestFrameworks.Add("Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute", "VSTest");
+            this.KnownUnitTestFrameworks.Add("Xunit.FactAttribute", "Xunit");
+            this.KnownUnitTestFrameworks.Add("Xunit.TheoryAttribute", "Xunit");
+            this.KnownUnitTestFrameworks.Add("NUnit.Framework.TestAttribute", "NUnit");
+            this.KnownUnitTestFrameworks.Add("NUnit.Framework.TheoryAttribute", "NUnit");
+        }
 
         /// <inheritdoc/>
         internal override void VisitModule(ModuleDefinition module)
@@ -47,12 +48,6 @@ namespace CILInsights
         }
 
         /// <inheritdoc/>
-        internal override void VisitField(FieldDefinition field)
-        {
-            Console.WriteLine($"............. [!] field '{field}'");
-        }
-
-        /// <inheritdoc/>
         internal override void VisitMethod(MethodDefinition method)
         {
             this.Method = null;
@@ -64,64 +59,40 @@ namespace CILInsights
                 this.Processor = method.Body.GetILProcessor();
             }
 
-            Console.WriteLine($"............. [!] return type '{method.ReturnType}'");
-        }
-
-        /// <inheritdoc/>
-        internal override void VisitVariable(VariableDefinition variable)
-        {
-            if (this.Method is null)
+            if (method.CustomAttributes.Count > 0)
             {
-                return;
-            }
+                // Search for a method with a unit testing framework attribute.
+                Debug.WriteLine($"............. [!] '{method.Name}'");
+                foreach (var attr in method.CustomAttributes)
+                {
+                    Debug.WriteLine($"............... attr: '{attr.AttributeType.FullName}'");
+                    if (this.KnownUnitTestFrameworks.TryGetValue(attr.AttributeType.FullName, out string framework))
+                    {
+                        Debug.WriteLine($"............. [{framework}] '{method.Name}'");
+                        if (!this.Report.TestAssemblies.Contains(this.Module.FileName))
+                        {
+                            this.Report.TestAssemblies.Add(this.Module.FileName);
+                        }
 
-            Console.WriteLine($"............. [!] variable '{variable.VariableType}'");
-        }
+                        if (!this.Report.TestFrameworkTypes.Contains(framework))
+                        {
+                            this.Report.TestFrameworkTypes.Add(framework);
+                        }
 
-        /// <inheritdoc/>
-        internal override void VisitInstruction(Instruction instruction)
-        {
-            if (this.Method is null)
-            {
-                return;
+                        this.Report.NumberOfTests++;
+                    }
+                }
             }
-
-            // Note that the C# compiler is not generating `OpCodes.Calli` instructions:
-            // https://docs.microsoft.com/en-us/archive/blogs/shawnfa/calli-is-not-verifiable.
-            if (instruction.OpCode == OpCodes.Stfld || instruction.OpCode == OpCodes.Ldfld || instruction.OpCode == OpCodes.Ldflda)
-            {
-                Console.WriteLine($"............. [!] {instruction}");
-            }
-            else if (instruction.OpCode == OpCodes.Initobj)
-            {
-                this.VisitInitobjInstruction(instruction);
-            }
-            else if ((instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) &&
-                instruction.Operand is MethodReference methodReference)
-            {
-                this.VisitCallInstruction(instruction, methodReference);
-            }
-
-            return;
         }
 
         /// <summary>
-        /// Transforms the specified <see cref="OpCodes.Initobj"/> instruction.
+        /// Returns the first found custom attribute with the specified type, if such an attribute
+        /// is applied to the specified assembly, else null.
         /// </summary>
-        /// <returns>The unmodified instruction, or the newly replaced instruction.</returns>
-        private void VisitInitobjInstruction(Instruction instruction)
-        {
-            Console.WriteLine($"............. [!] {instruction}");
-        }
-
-        /// <summary>
-        /// Transforms the specified non-generic <see cref="OpCodes.Call"/> or <see cref="OpCodes.Callvirt"/> instruction.
-        /// </summary>
-        /// <returns>The unmodified instruction, or the newly replaced instruction.</returns>
-        private void VisitCallInstruction(Instruction instruction, MethodReference method)
-        {
-            Console.WriteLine($"............. [!] {instruction}");
-        }
+        private static CustomAttribute GetCustomAttribute(MethodDefinition method, Type attributeType) =>
+            method.CustomAttributes.FirstOrDefault(
+                attr => attr.AttributeType.Namespace == attributeType.Namespace &&
+                attr.AttributeType.Name == attributeType.Name);
 
         /// <summary>
         /// Checks if the specified type is the <see cref="Task"/> type.

@@ -12,6 +12,39 @@ namespace CILInsights
     internal abstract class AssemblyAnalysis
     {
         /// <summary>
+        /// Report with insights from the analysis.
+        /// </summary>
+        protected readonly Report Report;
+
+        /// <summary>
+        /// The current module being transformed.
+        /// </summary>
+        protected ModuleDefinition Module;
+
+        /// <summary>
+        /// The current type being transformed.
+        /// </summary>
+        protected TypeDefinition TypeDef;
+
+        /// <summary>
+        /// The current method being transformed.
+        /// </summary>
+        protected MethodDefinition Method;
+
+        /// <summary>
+        /// A helper class for editing method body.
+        /// </summary>
+        protected ILProcessor Processor;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AssemblyAnalysis"/> class.
+        /// </summary>
+        protected AssemblyAnalysis(Report report)
+        {
+            this.Report = report;
+        }
+
+        /// <summary>
         /// Visits the specified <see cref="ModuleDefinition"/> inside the <see cref="AssemblyDefinition"/>
         /// that was visited by the <see cref="AssemblyAnalyzer"/>.
         /// </summary>
