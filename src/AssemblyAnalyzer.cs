@@ -5,11 +5,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Text.Json;
+using CILAnalyzer.Reports;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
-namespace CILInsights
+namespace CILAnalyzer
 {
     /// <summary>
     /// Analyzes an assembly to extract insights.
@@ -17,9 +19,15 @@ namespace CILInsights
     public class AssemblyAnalyzer
     {
         /// <summary>
-        /// Report with insights from the analysis.
+        /// Known assembly frequencies.
         /// </summary>
-        private readonly Report Report;
+        private static readonly Dictionary<int, ISet<string>> KnownAssemblyFrequencies =
+            new Dictionary<int, ISet<string>>();
+
+        /// <summary>
+        /// Contains data from the analysis.
+        /// </summary>
+        private readonly TestProjectInfo Info;
 
         /// <summary>
         /// The path to the directory containing the assemblies to analyze.
@@ -46,7 +54,7 @@ namespace CILInsights
         /// </summary>
         private AssemblyAnalyzer(string assemblyDir, HashSet<string> assemblyPaths)
         {
-            this.Report = new Report();
+            this.Info = new TestProjectInfo();
             this.AssemblyDir = assemblyDir;
             this.AssemblyPaths = assemblyPaths;
 
@@ -60,8 +68,8 @@ namespace CILInsights
 
             this.Passes = new List<AssemblyAnalysis>()
             {
-                 new TestFrameworkAnalysis(this.Report)
-                 //new TaskAnalysis(this.Report)
+                 new TestFrameworkAnalysis(this.Info),
+                 new ThreadingAnalysis(this.Info)
             };
         }
 
@@ -72,6 +80,27 @@ namespace CILInsights
         {
             var analyzer = new AssemblyAnalyzer(assemblyDir, assemblyPaths);
             analyzer.Analyze();
+        }
+
+        /// <summary>
+        /// Loads the assembly frequency report, if it exists and is not already loaded.
+        /// </summary>
+        public static bool TryLoadAssemblyFrequencyReport(string path)
+        {
+            string filePath = Path.Combine(path, TestProjectInfo.AssemblyInsightsFileName);
+            if (KnownAssemblyFrequencies.Count is 0 && File.Exists(filePath))
+            {
+                string jsonReport = File.ReadAllText(filePath);
+                var report = JsonSerializer.Deserialize<List<AssemblyFrequencies>>(jsonReport);
+                foreach (var kvp in report)
+                {
+                    KnownAssemblyFrequencies.Add(kvp.Frequency, kvp.Assemblies);
+                }
+
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -98,7 +127,7 @@ namespace CILInsights
 
             string reportFile = $"{Path.Combine(this.AssemblyDir, "cil.insights.json")}";
             Console.WriteLine($"... Writing the gathered insights to '{reportFile}'");
-            string report = JsonSerializer.Serialize(this.Report, options);
+            string report = JsonSerializer.Serialize(this.Info, options);
             File.WriteAllText(reportFile, report);
         }
 
@@ -107,6 +136,16 @@ namespace CILInsights
         /// </summary>
         private void VisitAssembly(string assemblyPath)
         {
+            string assemblyName = Path.GetFileName(assemblyPath);
+            this.Info.Assemblies.Add(assemblyName);
+
+            if (this.DisallowedAssemblies.Contains(assemblyName) ||
+                (KnownAssemblyFrequencies.TryGetValue(1, out ISet<string> knownAssemblies) &&
+                !knownAssemblies.Contains(assemblyName)))
+            {
+                return;
+            }
+
             var isSymbolFileAvailable = IsSymbolFileAvailable(assemblyPath);
             var assembly = AssemblyDefinition.ReadAssembly(assemblyPath, new ReaderParameters()
             {
@@ -114,13 +153,8 @@ namespace CILInsights
                 ReadSymbols = isSymbolFileAvailable
             });
 
-            string assemblyName = Path.GetFileName(assemblyPath);
-            if (this.DisallowedAssemblies.Contains(assemblyName))
-            {
-                return;
-            }
-
             Console.WriteLine($"... Analyzing the '{assemblyName}' assembly ({assembly.FullName})");
+            this.IdentifyRuntimeVersion(assembly);
 
             foreach (var analysis in this.Passes)
             {
@@ -199,6 +233,18 @@ namespace CILInsights
         }
 
         /// <summary>
+        /// Identifies the .NET runtime version of the specified assembly.
+        /// </summary>
+        private void IdentifyRuntimeVersion(AssemblyDefinition assembly)
+        {
+            var attribute = GetCustomAttribute(assembly, typeof(TargetFrameworkAttribute));
+            if (attribute != null)
+            {
+                this.Info.RuntimeVersions.Add((string)attribute.ConstructorArguments[0].Value);
+            }
+        }
+
+        /// <summary>
         /// Returns a new assembly resolver.
         /// </summary>
         private IAssemblyResolver GetAssemblyResolver()
@@ -210,6 +256,15 @@ namespace CILInsights
             assemblyResolver.ResolveFailure += this.OnResolveAssemblyFailure;
             return assemblyResolver;
         }
+
+        /// <summary>
+        /// Returns the first found custom attribute with the specified type, if such an attribute
+        /// is applied to the specified assembly, else null.
+        /// </summary>
+        private static CustomAttribute GetCustomAttribute(AssemblyDefinition assembly, Type attributeType) =>
+            assembly.CustomAttributes.FirstOrDefault(
+                attr => attr.AttributeType.Namespace == attributeType.Namespace &&
+                attr.AttributeType.Name == attributeType.Name);
 
         /// <summary>
         /// Checks if the symbol file for the specified assembly is available.

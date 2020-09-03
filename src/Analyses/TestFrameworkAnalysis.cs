@@ -7,10 +7,10 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using CILAnalyzer.Reports;
 using Mono.Cecil;
-using Mono.Cecil.Cil;
 
-namespace CILInsights
+namespace CILAnalyzer
 {
     internal class TestFrameworkAnalysis : AssemblyAnalysis
     {
@@ -22,11 +22,11 @@ namespace CILInsights
         /// <summary>
         /// Initializes a new instance of the <see cref="TestFrameworkAnalysis"/> class.
         /// </summary>
-        internal TestFrameworkAnalysis(Report report)
-            : base(report)
+        internal TestFrameworkAnalysis(TestProjectInfo info)
+            : base(info)
         {
             this.KnownUnitTestFrameworks = new Dictionary<string, string>();
-            this.KnownUnitTestFrameworks.Add("Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute", "VSTest");
+            this.KnownUnitTestFrameworks.Add("Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute", "MSTest");
             this.KnownUnitTestFrameworks.Add("Xunit.FactAttribute", "Xunit");
             this.KnownUnitTestFrameworks.Add("Xunit.TheoryAttribute", "Xunit");
             this.KnownUnitTestFrameworks.Add("NUnit.Framework.TestAttribute", "NUnit");
@@ -69,17 +69,9 @@ namespace CILInsights
                     if (this.KnownUnitTestFrameworks.TryGetValue(attr.AttributeType.FullName, out string framework))
                     {
                         Debug.WriteLine($"............. [{framework}] '{method.Name}'");
-                        if (!this.Report.TestAssemblies.Contains(this.Module.FileName))
-                        {
-                            this.Report.TestAssemblies.Add(this.Module.FileName);
-                        }
-
-                        if (!this.Report.TestFrameworkTypes.Contains(framework))
-                        {
-                            this.Report.TestFrameworkTypes.Add(framework);
-                        }
-
-                        this.Report.NumberOfTests++;
+                        this.Info.TestFrameworkTypes.Add(framework);
+                        this.Info.TestAssemblies.Add(this.Module.FileName);
+                        this.Info.NumberOfTests++;
                     }
                 }
             }

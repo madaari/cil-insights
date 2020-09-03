@@ -2,7 +2,7 @@
   <PropertyGroup>
     <Description>The Coyote command line tool.</Description>
     <AssemblyName>cil-analyzer</AssemblyName>
-    <RootNamespace>CILInsights</RootNamespace>
+    <RootNamespace>CILAnalyzer</RootNamespace>
     <LangVersion>8.0</LangVersion>
     <TargetFrameworks>netcoreapp3.1</TargetFrameworks>
     <OutputType>Exe</OutputType>

@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace CILInsights
+namespace CILAnalyzer
 {
     /// <summary>
     /// Entry point to the Coyote tool.
@@ -51,6 +51,7 @@ namespace CILInsights
                 assemblyDir = path;
             }
 
+            AssemblyAnalyzer.TryLoadAssemblyFrequencyReport(path);
             AssemblyAnalyzer.Run(assemblyDir, assemblyPaths);
 
             Console.WriteLine($". Done analyzing");
@@ -58,6 +59,7 @@ namespace CILInsights
 
         private static void AnalyzeMany(string path)
         {
+            AssemblyAnalyzer.TryLoadAssemblyFrequencyReport(path);
             foreach (var directory in Directory.GetDirectories(path))
             {
                 if (!Directory.EnumerateFiles(directory).Any(file => file.EndsWith(".dll") || file.EndsWith(".exe")))

@@ -4,7 +4,7 @@
 using System;
 using System.Globalization;
 
-namespace CILInsights
+namespace CILAnalyzer
 {
     /// <summary>
     /// Static class implementing debug reporting methods.

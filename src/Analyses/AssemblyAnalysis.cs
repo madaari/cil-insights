@@ -1,10 +1,11 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using CILAnalyzer.Reports;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
-namespace CILInsights
+namespace CILAnalyzer
 {
     /// <summary>
     /// An abstract interface for analyzing IL using a visitor pattern.
@@ -12,9 +13,9 @@ namespace CILInsights
     internal abstract class AssemblyAnalysis
     {
         /// <summary>
-        /// Report with insights from the analysis.
+        /// Contains data from the analysis.
         /// </summary>
-        protected readonly Report Report;
+        protected readonly TestProjectInfo Info;
 
         /// <summary>
         /// The current module being transformed.
@@ -39,9 +40,9 @@ namespace CILInsights
         /// <summary>
         /// Initializes a new instance of the <see cref="AssemblyAnalysis"/> class.
         /// </summary>
-        protected AssemblyAnalysis(Report report)
+        protected AssemblyAnalysis(TestProjectInfo info)
         {
-            this.Report = report;
+            this.Info = info;
         }
 
         /// <summary>
