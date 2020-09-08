@@ -62,16 +62,26 @@ namespace CILAnalyzer
             if (method.CustomAttributes.Count > 0)
             {
                 // Search for a method with a unit testing framework attribute.
-                Debug.WriteLine($"............. [!] '{method.Name}'");
                 foreach (var attr in method.CustomAttributes)
                 {
                     Debug.WriteLine($"............... attr: '{attr.AttributeType.FullName}'");
-                    if (this.KnownUnitTestFrameworks.TryGetValue(attr.AttributeType.FullName, out string framework))
+                    if (IsTestFrameworkAttribute(attr))
                     {
-                        Debug.WriteLine($"............. [{framework}] '{method.Name}'");
-                        this.Info.TestFrameworkTypes.Add(framework);
-                        this.Info.TestAssemblies.Add(this.Module.FileName);
-                        this.Info.NumberOfTests++;
+                        string name = attr.AttributeType.FullName;
+                        if (this.KnownUnitTestFrameworks.TryGetValue(name, out string framework))
+                        {
+                            Debug.WriteLine($"............. [{framework}] '{method.Name}'");
+                            this.Info.TestFrameworkTypes.Add(framework);
+                            this.Info.TestAssemblies.Add(this.Module.FileName);
+                            this.Info.NumberOfTests++;
+                        }
+
+                        if (!this.Info.TestFrameworkAPIs.ContainsKey(name))
+                        {
+                            this.Info.TestFrameworkAPIs.Add(name, 0);
+                        }
+
+                        this.Info.TestFrameworkAPIs[name]++;
                     }
                 }
             }
@@ -85,6 +95,14 @@ namespace CILAnalyzer
             method.CustomAttributes.FirstOrDefault(
                 attr => attr.AttributeType.Namespace == attributeType.Namespace &&
                 attr.AttributeType.Name == attributeType.Name);
+
+        /// <summary>
+        /// Checks if the specified type is a threading type.
+        /// </summary>
+        private static bool IsTestFrameworkAttribute(CustomAttribute attr) => attr != null &&
+            (attr.AttributeType.FullName.StartsWith("Microsoft.VisualStudio.TestTools.UnitTesting") ||
+            attr.AttributeType.FullName.StartsWith("Xunit") ||
+            attr.AttributeType.FullName.StartsWith("NUnit.Framework"));
 
         /// <summary>
         /// Checks if the specified type is the <see cref="Task"/> type.

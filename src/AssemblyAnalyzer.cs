@@ -139,9 +139,16 @@ namespace CILAnalyzer
             string assemblyName = Path.GetFileName(assemblyPath);
             this.Info.Assemblies.Add(assemblyName);
 
-            if (this.DisallowedAssemblies.Contains(assemblyName) ||
-                (KnownAssemblyFrequencies.TryGetValue(1, out ISet<string> knownAssemblies) &&
-                !knownAssemblies.Contains(assemblyName)))
+            var allowedAssemblies = new HashSet<string>();
+            foreach (int freq in Enumerable.Range(1, 10))
+            {
+                if (KnownAssemblyFrequencies.TryGetValue(freq, out ISet<string> knownAssemblies))
+                {
+                    allowedAssemblies.UnionWith(knownAssemblies);
+                }
+            }
+
+            if (this.DisallowedAssemblies.Contains(assemblyName) || !allowedAssemblies.Contains(assemblyName))
             {
                 return;
             }

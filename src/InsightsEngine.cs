@@ -45,6 +45,7 @@ namespace CILAnalyzer
             var testFrameworks = new Dictionary<string, int>();
             var assemblies = new Dictionary<string, int>();
             var threadingAPIs = new Dictionary<string, int>();
+            var testFrameworkAPIs = new Dictionary<string, int>();
 
             foreach (TestProjectInfo info in GetTestProjectInfos(path))
             {
@@ -103,6 +104,17 @@ namespace CILAnalyzer
 
                     threadingAPIs[kvp.Key] += kvp.Value;
                 }
+
+                // Aggregate test framework APIs that are used.
+                foreach (var kvp in info.TestFrameworkAPIs)
+                {
+                    if (!testFrameworkAPIs.ContainsKey(kvp.Key))
+                    {
+                        testFrameworkAPIs.Add(kvp.Key, 0);
+                    }
+
+                    testFrameworkAPIs[kvp.Key] += kvp.Value;
+                }
             }
 
             Console.WriteLine($"General statistics:");
@@ -126,6 +138,7 @@ namespace CILAnalyzer
 
             ReportAssemblyFrequencies(assemblies, path);
             ReportThreadingAPIFrequencies(threadingAPIs, path);
+            ReportTestFrameworkAPIFrequencies(testFrameworkAPIs, path);
         }
 
         /// <summary>
@@ -181,6 +194,34 @@ namespace CILAnalyzer
             };
 
             string report = JsonSerializer.Serialize(AssemblyFrequencies.FromDictionary(threadingAPIFrequencies), options);
+            File.WriteAllText(reportFile, report);
+        }
+
+        /// <summary>
+        /// Write the test framework API frequencies in a JSON file.
+        /// </summary>
+        private static void ReportTestFrameworkAPIFrequencies(Dictionary<string, int> testFrameworkAPIs, string path)
+        {
+            var testFrameworkAPIFrequencies = new SortedDictionary<int, HashSet<string>>();
+            foreach (var kvp in testFrameworkAPIs)
+            {
+                if (!testFrameworkAPIFrequencies.ContainsKey(kvp.Value))
+                {
+                    testFrameworkAPIFrequencies.Add(kvp.Value, new HashSet<string>());
+                }
+
+                testFrameworkAPIFrequencies[kvp.Value].Add(kvp.Key);
+            }
+
+            string reportFile = $"{Path.Combine(path, TestProjectInfo.TestFrameworkAPIInsightsFileName)}";
+            Console.WriteLine($"... Writing test framework API frequencies to '{reportFile}'");
+
+            var options = new JsonSerializerOptions
+            {
+                WriteIndented = true
+            };
+
+            string report = JsonSerializer.Serialize(AssemblyFrequencies.FromDictionary(testFrameworkAPIFrequencies), options);
             File.WriteAllText(reportFile, report);
         }
 

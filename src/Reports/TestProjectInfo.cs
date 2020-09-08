@@ -9,6 +9,7 @@ namespace CILAnalyzer.Reports
     {
         internal static string AssemblyInsightsFileName => "assemblyfreq.insights.json";
         internal static string ThreadingAPIInsightsFileName => "threading.insights.json";
+        internal static string TestFrameworkAPIInsightsFileName => "testframework.insights.json";
 
         public int NumberOfTests { get; set; }
         public ISet<string> RuntimeVersions { get; set; }
@@ -16,6 +17,7 @@ namespace CILAnalyzer.Reports
         public ISet<string> TestAssemblies { get; set; }
         public ISet<string> Assemblies { get; set; }
         public IDictionary<string, int> ThreadingAPIs { get; set; }
+        public IDictionary<string, int> TestFrameworkAPIs { get; set; }
 
         public TestProjectInfo()
         {
@@ -24,6 +26,7 @@ namespace CILAnalyzer.Reports
             this.TestAssemblies = new SortedSet<string>();
             this.Assemblies = new SortedSet<string>();
             this.ThreadingAPIs = new SortedDictionary<string, int>();
+            this.TestFrameworkAPIs = new SortedDictionary<string, int>();
         }
     }
 }
