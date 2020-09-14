@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.IO;
 using CILAnalyzer.Reports;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
@@ -128,6 +129,14 @@ namespace CILAnalyzer
                     }
 
                     this.Info.ThreadingAPIs[name]++;
+                    this.Info.ThreadingAssemblies.Add(Path.GetFileName(this.Module.FileName));
+
+                    if (!(resolvedDeclaringType.Namespace.StartsWith("System.Threading.Tasks") ||
+                        resolvedDeclaringType.Namespace.StartsWith("System.Runtime.CompilerServices") ||
+                        resolvedDeclaringType.Namespace.StartsWith("System.Threading.CancellationTokenSource")))
+                    {
+                        this.Info.UnsupportedAssemblies.Add(Path.GetFileName(this.Module.FileName));
+                    }
                 }
             }
             catch (AssemblyResolutionException)

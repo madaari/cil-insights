@@ -7,6 +7,8 @@ namespace CILAnalyzer.Reports
 {
     public class AssemblyFrequencies
     {
+        internal static string FileName => "assemblyfreq.insights.json";
+
         public int Frequency { get; set; }
         public ISet<string> Assemblies { get; set; }
 

@@ -1,12 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Threading;
-using System.Threading.Tasks;
+using System.IO;
 using CILAnalyzer.Reports;
 using Mono.Cecil;
 
@@ -72,7 +68,7 @@ namespace CILAnalyzer
                         {
                             Debug.WriteLine($"............. [{framework}] '{method.Name}'");
                             this.Info.TestFrameworkTypes.Add(framework);
-                            this.Info.TestAssemblies.Add(this.Module.FileName);
+                            this.Info.TestAssemblies.Add(Path.GetFileName(this.Module.FileName));
                             this.Info.NumberOfTests++;
                         }
 
@@ -88,70 +84,11 @@ namespace CILAnalyzer
         }
 
         /// <summary>
-        /// Returns the first found custom attribute with the specified type, if such an attribute
-        /// is applied to the specified assembly, else null.
-        /// </summary>
-        private static CustomAttribute GetCustomAttribute(MethodDefinition method, Type attributeType) =>
-            method.CustomAttributes.FirstOrDefault(
-                attr => attr.AttributeType.Namespace == attributeType.Namespace &&
-                attr.AttributeType.Name == attributeType.Name);
-
-        /// <summary>
         /// Checks if the specified type is a threading type.
         /// </summary>
         private static bool IsTestFrameworkAttribute(CustomAttribute attr) => attr != null &&
             (attr.AttributeType.FullName.StartsWith("Microsoft.VisualStudio.TestTools.UnitTesting") ||
             attr.AttributeType.FullName.StartsWith("Xunit") ||
             attr.AttributeType.FullName.StartsWith("NUnit.Framework"));
-
-        /// <summary>
-        /// Checks if the specified type is the <see cref="Task"/> type.
-        /// </summary>
-        private static bool IsSystemTaskType(TypeReference type) => type.Namespace == KnownNamespaces.SystemTasksName &&
-            (type.Name == typeof(Task).Name || type.Name.StartsWith("Task`"));
-
-        /// <summary>
-        /// Checks if the <see cref="Task"/> method with the specified name is supported.
-        /// </summary>
-        private static bool IsSupportedTaskMethod(string name) =>
-            name == "get_Factory" ||
-            name == "get_Result" ||
-            name == nameof(Task.Run) ||
-            name == nameof(Task.Delay) ||
-            name == nameof(Task.WhenAll) ||
-            name == nameof(Task.WhenAny) ||
-            name == nameof(Task.WaitAll) ||
-            name == nameof(Task.WaitAny) ||
-            name == nameof(Task.Wait) ||
-            name == nameof(Task.Yield) ||
-            name == nameof(Task.GetAwaiter);
-
-        /// <summary>
-        /// Cache of known <see cref="SystemCompiler"/> type names.
-        /// </summary>
-        private static class KnownSystemTypes
-        {
-            internal static string TaskFullName { get; } = typeof(Task).FullName;
-            internal static string GenericTaskFullName { get; } = typeof(Task<>).FullName;
-            internal static string AsyncTaskMethodBuilderFullName { get; } = typeof(AsyncTaskMethodBuilder).FullName;
-            internal static string GenericAsyncTaskMethodBuilderName { get; } = typeof(AsyncTaskMethodBuilder<>).Name;
-            internal static string GenericAsyncTaskMethodBuilderFullName { get; } = typeof(AsyncTaskMethodBuilder<>).FullName;
-            internal static string TaskAwaiterFullName { get; } = typeof(TaskAwaiter).FullName;
-            internal static string GenericTaskAwaiterName { get; } = typeof(TaskAwaiter<>).Name;
-            internal static string GenericTaskAwaiterFullName { get; } = typeof(TaskAwaiter<>).FullName;
-            internal static string YieldAwaitableFullName { get; } = typeof(YieldAwaitable).FullName;
-            internal static string YieldAwaiterFullName { get; } = typeof(YieldAwaitable).FullName + "/YieldAwaiter";
-            internal static string TaskExtensionsFullName { get; } = typeof(TaskExtensions).FullName;
-            internal static string TaskFactoryFullName { get; } = typeof(TaskFactory).FullName;
-            internal static string ThreadPoolFullName { get; } = typeof(ThreadPool).FullName;
-        }
-
-        /// <summary>
-        /// Cache of known namespace names.
-        /// </summary>
-        private static class KnownNamespaces
-        {
-            internal static string SystemTasksName { get; } = typeof(Task).Namespace;
-        }
     }
 }

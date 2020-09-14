@@ -87,7 +87,7 @@ namespace CILAnalyzer
         /// </summary>
         public static bool TryLoadAssemblyFrequencyReport(string path)
         {
-            string filePath = Path.Combine(path, TestProjectInfo.AssemblyInsightsFileName);
+            string filePath = Path.Combine(path, AssemblyFrequencies.FileName);
             if (KnownAssemblyFrequencies.Count is 0 && File.Exists(filePath))
             {
                 string jsonReport = File.ReadAllText(filePath);

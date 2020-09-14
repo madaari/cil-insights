@@ -47,7 +47,7 @@ namespace CILAnalyzer
             var threadingAPIs = new Dictionary<string, int>();
             var testFrameworkAPIs = new Dictionary<string, int>();
 
-            foreach (TestProjectInfo info in GetTestProjectInfos(path))
+            foreach (var (info, file) in GetTestProjectInfos(path))
             {
                 numReports++;
                 numTests += info.NumberOfTests;
@@ -136,15 +136,68 @@ namespace CILAnalyzer
                 Console.WriteLine($" |_ {testFramework.Key}: {testFramework.Value}");
             }
 
-            ReportAssemblyFrequencies(assemblies, path);
-            ReportThreadingAPIFrequencies(threadingAPIs, path);
-            ReportTestFrameworkAPIFrequencies(testFrameworkAPIs, path);
+            var assemblyFrequencies = ReportAssemblyFrequencies(path, assemblies);
+            ReportThreadingAPIFrequencies(path, threadingAPIs);
+            ReportTestFrameworkAPIFrequencies(path, testFrameworkAPIs);
+
+            ProduceRewritingOptions(path, assemblyFrequencies);
+        }
+
+        /// <summary>
+        /// Write the rewriting options in a JSON file.
+        /// </summary>
+        private static void ProduceRewritingOptions(string path, IDictionary<int, HashSet<string>> assemblyFrequencies)
+        {
+            foreach (var (info, file) in GetTestProjectInfos(path))
+            {
+                var supportedAssemblies = new HashSet<string>();
+                foreach (var assembly in info.Assemblies)
+                {
+                    if (!info.UnsupportedAssemblies.Contains(assembly))
+                    {
+                        supportedAssemblies.Add(assembly);
+                    }
+                }
+
+                bool skip = false;
+                foreach (var assembly in info.TestAssemblies)
+                {
+                    if (!supportedAssemblies.Contains(assembly))
+                    {
+                        skip = true;
+                        break;
+                    }
+                }
+
+                if (skip)
+                {
+                    continue;
+                }
+
+                var directoryPath = Path.GetDirectoryName(file);
+                var options = new RewritingOptions
+                {
+                    AssembliesPath = directoryPath,
+                    OutputPath = Path.Combine(directoryPath, "rewritten"),
+                    IsRewritingUnitTests = true
+                };
+
+                foreach (var assembly in supportedAssemblies)
+                {
+                    options.Assemblies.Add(assembly);
+                }
+
+                string reportFile = $"{Path.Combine(directoryPath, RewritingOptions.FileName)}";
+                Console.WriteLine($"... Writing rewriting options to '{reportFile}'");
+                string report = JsonSerializer.Serialize(options, GetJsonSerializerOptions());
+                File.WriteAllText(reportFile, report);
+            }
         }
 
         /// <summary>
         /// Write the assembly frequencies in a JSON file.
         /// </summary>
-        private static void ReportAssemblyFrequencies(Dictionary<string, int> assemblies, string path)
+        private static IDictionary<int, HashSet<string>> ReportAssemblyFrequencies(string path, Dictionary<string, int> assemblies)
         {
             var assemblyFrequencies = new SortedDictionary<int, HashSet<string>>();
             foreach (var kvp in assemblies)
@@ -157,22 +210,20 @@ namespace CILAnalyzer
                 assemblyFrequencies[kvp.Value].Add(kvp.Key);
             }
 
-            string reportFile = $"{Path.Combine(path, TestProjectInfo.AssemblyInsightsFileName)}";
+            string reportFile = $"{Path.Combine(path, AssemblyFrequencies.FileName)}";
             Console.WriteLine($"... Writing assembly frequencies to '{reportFile}'");
 
-            var options = new JsonSerializerOptions
-            {
-                WriteIndented = true
-            };
-
-            string report = JsonSerializer.Serialize(AssemblyFrequencies.FromDictionary(assemblyFrequencies), options);
+            string report = JsonSerializer.Serialize(AssemblyFrequencies.FromDictionary(assemblyFrequencies),
+                GetJsonSerializerOptions());
             File.WriteAllText(reportFile, report);
+
+            return assemblyFrequencies;
         }
 
         /// <summary>
         /// Write the threading frequencies in a JSON file.
         /// </summary>
-        private static void ReportThreadingAPIFrequencies(Dictionary<string, int> threadingAPIs, string path)
+        private static IDictionary<int, HashSet<string>> ReportThreadingAPIFrequencies(string path, Dictionary<string, int> threadingAPIs)
         {
             var threadingAPIFrequencies = new SortedDictionary<int, HashSet<string>>();
             foreach (var kvp in threadingAPIs)
@@ -188,19 +239,17 @@ namespace CILAnalyzer
             string reportFile = $"{Path.Combine(path, TestProjectInfo.ThreadingAPIInsightsFileName)}";
             Console.WriteLine($"... Writing threading API frequencies to '{reportFile}'");
 
-            var options = new JsonSerializerOptions
-            {
-                WriteIndented = true
-            };
-
-            string report = JsonSerializer.Serialize(AssemblyFrequencies.FromDictionary(threadingAPIFrequencies), options);
+            string report = JsonSerializer.Serialize(AssemblyFrequencies.FromDictionary(threadingAPIFrequencies),
+                GetJsonSerializerOptions());
             File.WriteAllText(reportFile, report);
+
+            return threadingAPIFrequencies;
         }
 
         /// <summary>
         /// Write the test framework API frequencies in a JSON file.
         /// </summary>
-        private static void ReportTestFrameworkAPIFrequencies(Dictionary<string, int> testFrameworkAPIs, string path)
+        private static IDictionary<int, HashSet<string>> ReportTestFrameworkAPIFrequencies(string path, Dictionary<string, int> testFrameworkAPIs)
         {
             var testFrameworkAPIFrequencies = new SortedDictionary<int, HashSet<string>>();
             foreach (var kvp in testFrameworkAPIs)
@@ -216,16 +265,15 @@ namespace CILAnalyzer
             string reportFile = $"{Path.Combine(path, TestProjectInfo.TestFrameworkAPIInsightsFileName)}";
             Console.WriteLine($"... Writing test framework API frequencies to '{reportFile}'");
 
-            var options = new JsonSerializerOptions
-            {
-                WriteIndented = true
-            };
 
-            string report = JsonSerializer.Serialize(AssemblyFrequencies.FromDictionary(testFrameworkAPIFrequencies), options);
+            string report = JsonSerializer.Serialize(AssemblyFrequencies.FromDictionary(testFrameworkAPIFrequencies),
+                GetJsonSerializerOptions());
             File.WriteAllText(reportFile, report);
+
+            return testFrameworkAPIFrequencies;
         }
 
-        private static IEnumerable<TestProjectInfo> GetTestProjectInfos(string path)
+        private static IEnumerable<(TestProjectInfo, string)> GetTestProjectInfos(string path)
         {
             var reportFiles = new HashSet<string>();
             GetReportFiles(path, reportFiles);
@@ -233,7 +281,7 @@ namespace CILAnalyzer
             foreach (var reportFile in reportFiles)
             {
                 string jsonReport = File.ReadAllText(reportFile);
-                yield return JsonSerializer.Deserialize<TestProjectInfo>(jsonReport);
+                yield return (JsonSerializer.Deserialize<TestProjectInfo>(jsonReport), reportFile);
             }
         }
 
@@ -251,5 +299,11 @@ namespace CILAnalyzer
                 files.Add(reports[0]);
             }
         }
+
+        private static JsonSerializerOptions GetJsonSerializerOptions() =>
+            new JsonSerializerOptions
+            {
+                WriteIndented = true
+            };
     }
 }
