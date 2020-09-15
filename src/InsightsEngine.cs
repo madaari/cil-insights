@@ -177,8 +177,8 @@ namespace CILAnalyzer
                 var directoryPath = Path.GetDirectoryName(file);
                 var options = new RewritingOptions
                 {
-                    AssembliesPath = directoryPath,
-                    OutputPath = Path.Combine(directoryPath, "rewritten"),
+                    AssembliesPath = ".",
+                    OutputPath = Path.Combine(".", "rewritten"),
                     IsRewritingUnitTests = true
                 };
 
