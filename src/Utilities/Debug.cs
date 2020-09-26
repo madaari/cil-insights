@@ -111,5 +111,19 @@ namespace CILAnalyzer
                 Console.WriteLine(string.Format(CultureInfo.InvariantCulture, format, args));
             }
         }
+
+        /// <summary>
+        /// Function to format the colour of the error message while printing on console.
+        /// By default, it will use red colour for errors
+        /// </summary>
+        /// <param name="error"></param>
+        public static void WriteError(string error)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+
+            Console.Error.WriteLine(error);
+
+            Console.ResetColor();
+        }
     }
 }

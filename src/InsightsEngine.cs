@@ -273,7 +273,7 @@ namespace CILAnalyzer
             return testFrameworkAPIFrequencies;
         }
 
-        private static IEnumerable<(TestProjectInfo, string)> GetTestProjectInfos(string path)
+        public static IEnumerable<(TestProjectInfo, string)> GetTestProjectInfos(string path)
         {
             var reportFiles = new HashSet<string>();
             GetReportFiles(path, reportFiles);
