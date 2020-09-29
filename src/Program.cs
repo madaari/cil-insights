@@ -35,7 +35,7 @@ namespace CILAnalyzer
 
         private static void Analyze(string path, bool isAssemblyFile)
         {
-            string assemblyDir = null;
+            string assemblyDir;
             var assemblyPaths = new HashSet<string>();
             if (isAssemblyFile)
             {
