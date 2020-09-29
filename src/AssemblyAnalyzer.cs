@@ -108,7 +108,6 @@ namespace CILAnalyzer
             Console.WriteLine($"... Writing the gathered insights to '{reportFile}'");
             string report = JsonSerializer.Serialize(this.Info, options);
             File.WriteAllText(reportFile, report);
-            Environment.Exit(1);
         }
 
         /// <summary>

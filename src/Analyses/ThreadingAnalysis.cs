@@ -33,12 +33,6 @@ namespace CILAnalyzer
         }
 
         /// <inheritdoc/>
-        internal override void VisitField(FieldDefinition field)
-        {
-            Debug.WriteLine($"............. [!] field '{field}'");
-        }
-
-        /// <inheritdoc/>
         internal override void VisitMethod(MethodDefinition method)
         {
             this.Method = null;
@@ -49,19 +43,6 @@ namespace CILAnalyzer
                 this.Method = method;
                 this.Processor = method.Body.GetILProcessor();
             }
-
-            Debug.WriteLine($"............. [!] return type '{method.ReturnType}'");
-        }
-
-        /// <inheritdoc/>
-        internal override void VisitVariable(VariableDefinition variable)
-        {
-            if (this.Method is null)
-            {
-                return;
-            }
-
-            Debug.WriteLine($"............. [!] variable '{variable.VariableType}'");
         }
 
         /// <inheritdoc/>
@@ -72,17 +53,7 @@ namespace CILAnalyzer
                 return;
             }
 
-            // Note that the C# compiler is not generating `OpCodes.Calli` instructions:
-            // https://docs.microsoft.com/en-us/archive/blogs/shawnfa/calli-is-not-verifiable.
-            if (instruction.OpCode == OpCodes.Stfld || instruction.OpCode == OpCodes.Ldfld || instruction.OpCode == OpCodes.Ldflda)
-            {
-                Debug.WriteLine($"............. [!] {instruction}");
-            }
-            else if (instruction.OpCode == OpCodes.Initobj)
-            {
-                this.VisitInitobjInstruction(instruction);
-            }
-            else if ((instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) &&
+            if ((instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) &&
                 instruction.Operand is MethodReference methodReference)
             {
                 this.VisitCallInstruction(instruction, methodReference);
@@ -92,22 +63,11 @@ namespace CILAnalyzer
         }
 
         /// <summary>
-        /// Transforms the specified <see cref="OpCodes.Initobj"/> instruction.
-        /// </summary>
-        /// <returns>The unmodified instruction, or the newly replaced instruction.</returns>
-        private void VisitInitobjInstruction(Instruction instruction)
-        {
-            Debug.WriteLine($"............. [!] {instruction}");
-        }
-
-        /// <summary>
         /// Transforms the specified non-generic <see cref="OpCodes.Call"/> or <see cref="OpCodes.Callvirt"/> instruction.
         /// </summary>
         /// <returns>The unmodified instruction, or the newly replaced instruction.</returns>
         private void VisitCallInstruction(Instruction instruction, MethodReference method)
         {
-            Debug.WriteLine($"............. [!] {instruction}");
-
             try
             {
                 TypeDefinition resolvedDeclaringType = method.DeclaringType.Resolve();
@@ -133,7 +93,8 @@ namespace CILAnalyzer
 
                     if (!(resolvedDeclaringType.Namespace.StartsWith("System.Threading.Tasks") ||
                         resolvedDeclaringType.Namespace.StartsWith("System.Runtime.CompilerServices") ||
-                        resolvedDeclaringType.Namespace.StartsWith("System.Threading.CancellationTokenSource")))
+                        resolvedDeclaringType.FullName.StartsWith("System.Threading.Monitor") ||
+                        resolvedDeclaringType.FullName.StartsWith("System.Threading.CancellationTokenSource")))
                     {
                         this.Info.UnsupportedAssemblies.Add(Path.GetFileName(this.Module.FileName));
                     }
@@ -148,10 +109,18 @@ namespace CILAnalyzer
         /// <summary>
         /// Checks if the specified type is a threading type.
         /// </summary>
-        private static bool IsThreadingType(TypeDefinition type) => type != null &&
-            (type.Module.Name is "System.Private.CoreLib.dll" || type.Module.Name is "mscorlib.dll") &&
-            (type.Namespace.StartsWith(KnownNamespaces.Threading) ||
-            type.Namespace.StartsWith(KnownNamespaces.CompilerServices));
+        private static bool IsThreadingType(TypeDefinition type)
+        {
+            if (type is null)
+            {
+                return false;
+            }
+
+            string module = Path.GetFileName(type.Module.FileName);
+            return (module is "System.Private.CoreLib.dll" || module is "mscorlib.dll") &&
+                (type.Namespace.StartsWith(KnownNamespaces.Threading) ||
+                type.Namespace.StartsWith(KnownNamespaces.CompilerServices));
+        }
 
         /// <summary>
         /// Cache of known namespace names.
