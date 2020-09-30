@@ -83,27 +83,6 @@ namespace CILAnalyzer
         }
 
         /// <summary>
-        /// Loads the assembly frequency report, if it exists and is not already loaded.
-        /// </summary>
-        public static bool TryLoadAssemblyFrequencyReport(string path)
-        {
-            string filePath = Path.Combine(path, AssemblyFrequencies.FileName);
-            if (KnownAssemblyFrequencies.Count is 0 && File.Exists(filePath))
-            {
-                string jsonReport = File.ReadAllText(filePath);
-                var report = JsonSerializer.Deserialize<List<AssemblyFrequencies>>(jsonReport);
-                foreach (var kvp in report)
-                {
-                    KnownAssemblyFrequencies.Add(kvp.Frequency, kvp.Assemblies);
-                }
-
-                return true;
-            }
-
-            return false;
-        }
-
-        /// <summary>
         /// Performs the assembly analysis.
         /// </summary>
         private void Analyze()
@@ -139,19 +118,12 @@ namespace CILAnalyzer
             string assemblyName = Path.GetFileName(assemblyPath);
             this.Info.Assemblies.Add(assemblyName);
 
-            var allowedAssemblies = new HashSet<string>();
-            foreach (int freq in Enumerable.Range(1, 10))
-            {
-                if (KnownAssemblyFrequencies.TryGetValue(freq, out ISet<string> knownAssemblies))
-                {
-                    allowedAssemblies.UnionWith(knownAssemblies);
-                }
-            }
-
-            if (this.DisallowedAssemblies.Contains(assemblyName) || !allowedAssemblies.Contains(assemblyName))
+            if (this.DisallowedAssemblies.Contains(assemblyName))
             {
                 return;
             }
+
+            Console.WriteLine(assemblyPath);
 
             var isSymbolFileAvailable = IsSymbolFileAvailable(assemblyPath);
             var assembly = AssemblyDefinition.ReadAssembly(assemblyPath, new ReaderParameters()

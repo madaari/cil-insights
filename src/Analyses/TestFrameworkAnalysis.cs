@@ -60,7 +60,6 @@ namespace CILAnalyzer
                 // Search for a method with a unit testing framework attribute.
                 foreach (var attr in method.CustomAttributes)
                 {
-                    Debug.WriteLine($"............... attr: '{attr.AttributeType.FullName}'");
                     if (IsTestFrameworkAttribute(attr))
                     {
                         string name = attr.AttributeType.FullName;

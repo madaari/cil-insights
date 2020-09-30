@@ -61,7 +61,7 @@ namespace CILAnalyzer
 
         private static void Analyze(string path, bool isAssemblyFile)
         {
-            string assemblyDir = null;
+            string assemblyDir;
             var assemblyPaths = new HashSet<string>();
             if (isAssemblyFile)
             {
@@ -77,7 +77,6 @@ namespace CILAnalyzer
                 assemblyDir = path;
             }
 
-            AssemblyAnalyzer.TryLoadAssemblyFrequencyReport(path);
             AssemblyAnalyzer.Run(assemblyDir, assemblyPaths);
 
             Console.WriteLine($". Done analyzing");
@@ -85,7 +84,6 @@ namespace CILAnalyzer
 
         private static void AnalyzeMany(string path)
         {
-            AssemblyAnalyzer.TryLoadAssemblyFrequencyReport(path);
             foreach (var directory in Directory.GetDirectories(path))
             {
                 if (!Directory.EnumerateFiles(directory).Any(file => file.EndsWith(".dll") || file.EndsWith(".exe")))
