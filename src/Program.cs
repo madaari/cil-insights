@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace CILAnalyzer
 {
@@ -14,8 +15,14 @@ namespace CILAnalyzer
     /// </summary>
     internal class Program
     {
-        private static string coyote_exe_path;
-        private static string mstest_exe_path;
+        private static string coyote_bin_path;
+        private static string vstest_exe_path;
+
+        private static int num_diff = 0;
+        public static int total_test_failed = 0;
+        private static int total_test_failed_w_rewrite = 0;
+        private static int total_test_skipped = 0;
+        private static int total_test_skipped_w_rewrite = 0;
 
         private static int Main(string[] args)
         {
@@ -43,6 +50,9 @@ namespace CILAnalyzer
                     break;
                 case "test-many":
                     RunTestSuiteMany(path);
+                    break;
+                case "test-diff":
+                    GenerateDiff(path);
                     break;
             }
 
@@ -95,6 +105,109 @@ namespace CILAnalyzer
             Console.WriteLine($". Done analyzing");
         }
 
+
+        private static void GenerateDiff(string path)
+        {
+
+            path = Path.GetFullPath(path);
+
+            foreach (var testdir in Directory.EnumerateDirectories(path))
+            {
+                // If this file exits then only call GenerateTestDiff
+                if(File.Exists(testdir + "\\cil.insights.json"))
+                {
+                    GenerateTestDiff(testdir);
+                }
+            }
+
+            Console.WriteLine($"Directories visited: {num_diff}. Total Test failed without rewrite: {total_test_failed}");
+            Console.WriteLine($"Total test failed with rewrite: {total_test_failed_w_rewrite}. Total test skipped: {total_test_skipped}." +
+                $"Total test skipped with rewrite: {total_test_skipped_w_rewrite}");
+        }
+
+        private static string GetVStestLogFile(string path)
+        {
+            if (!Directory.Exists(path)) return null;
+
+            if (!File.Exists(path + "\\log.vstest.txt")) return null;
+
+            string retval = File.ReadAllText(path + "\\log.vstest.txt");
+
+            return retval;
+        }
+
+        private static int GetFailedTests(string logfile)
+        {
+            int numfailed = 0;
+
+            foreach (string line in logfile.Split('\n'))
+            {
+                
+                if (line.ToLower().Contains("failed:"))
+                {
+                    numfailed = Int32.Parse(line.ToLower().Split(':')[1]);
+                }
+            }
+
+            return numfailed;
+        }
+
+        private static int GetSkippedTests(string logfile)
+        {
+            int numskipped = 0;
+
+            foreach (string line in logfile.Split('\n'))
+            {
+                if (line.ToLower().Contains("skipped:"))
+                {
+                    numskipped = Int32.Parse(line.ToLower().Split(':')[1]);
+                }
+            }
+
+            return numskipped;
+        }
+
+        private static void GenerateTestDiff(string testdir)
+        {
+            bool has_rewritten = false;
+            foreach (var dir in Directory.EnumerateDirectories(testdir))
+            {
+                if (dir.ToLower().Contains("rewritten"))
+                {
+                    has_rewritten = true;
+                    break;
+                }
+            }
+
+            if (has_rewritten == false) return;
+
+            string logfile_orignal = GetVStestLogFile(testdir);
+            string logfile_rewrite = GetVStestLogFile(testdir + "\\rewritten");
+
+            if (logfile_orignal == null || logfile_rewrite == null) return;
+
+            int num_failed_test = GetFailedTests(logfile_orignal);
+            int num_failed_test_rewrite = GetFailedTests(logfile_rewrite);
+
+            int num_skipped_test = GetSkippedTests(logfile_orignal);
+            int num_skipped_test_rewrite = GetSkippedTests(logfile_rewrite);
+
+            if (num_failed_test != num_failed_test_rewrite || num_skipped_test != num_skipped_test_rewrite)
+            {
+                Debug.WriteError($"Mismatch found! in dir: {testdir}");
+            }
+            else
+            {
+                System.Console.WriteLine($"Verified testdir: {testdir}");
+            }
+
+            num_diff++;
+            total_test_failed += num_failed_test;
+            total_test_failed_w_rewrite += num_failed_test_rewrite;
+            total_test_skipped += num_skipped_test;
+            total_test_skipped_w_rewrite += num_skipped_test_rewrite;
+        }
+
         private static void RunTestSuiteMany(string path)
         {
             path = Path.GetFullPath(path);
@@ -120,10 +233,12 @@ namespace CILAnalyzer
         /// <param name="path"></param>
         private static void RunTestSuite(string path)
         {
+            Console.WriteLine($"Running test case in dir: {path}");
+
             // Replace the relative path with absolute path
             path = Path.GetFullPath(path);
 
-            if(mstest_exe_path == null)
+            if (vstest_exe_path == null)
             {
                 Debug.WriteError("Please give the path to mstest.exe file using mstest-path=<> option");
                 Environment.Exit(1);
@@ -150,7 +265,7 @@ namespace CILAnalyzer
                     } else
                     {
                         Debug.WriteError($"Unsupported test framework: {testFramework}");
-                        Environment.Exit(1);
+                        return;
                     }
                 }
 
@@ -161,6 +276,8 @@ namespace CILAnalyzer
 
                 if (testframework != null && TestDllName != null) break;
             }
+
+            if (TestDllName == null || testframework == null) return;
 
             // Check if the Test DLL exists or not
             if(!File.Exists(path + "\\" + TestDllName))
@@ -181,9 +298,13 @@ namespace CILAnalyzer
 
                 if (testframework == "MSTest")
                 {
-                    process.StartInfo.FileName = mstest_exe_path+ "\\mstest.exe ";
-                    process.StartInfo.Arguments = "/testcontainer:" + TestDllName;
+                    process.StartInfo.FileName = vstest_exe_path+ " ";
+                    process.StartInfo.Arguments = "/platform:x64 " + TestDllName;
                     command_issued = process.StartInfo.FileName + process.StartInfo.Arguments;
+                } else
+                {
+                    // If it is not MSTest, leave it
+                    return;
                 }
 
                 process.StartInfo.UseShellExecute = false;
@@ -192,14 +313,16 @@ namespace CILAnalyzer
 
                 process.Start();
 
-                string op = process.StandardOutput.ReadToEnd(); /*Do nothing with this. */
+                string op = process.StandardOutput.ReadToEnd();
                 string err = process.StandardError.ReadToEnd();
                 int ex_code = process.ExitCode;
 
                 // MSTest will create this directory. Make sure to remove/change this in case of other
                 // Test framework
                 //System.Diagnostics.Debug.Assert(Directory.Exists(path + "\\TestResults"));
-    
+
+                File.WriteAllText(path + "\\log.vstest.txt", op);
+
                 if (err.Length > 1)
                 {
                     Debug.WriteError(err);
@@ -236,12 +359,6 @@ namespace CILAnalyzer
         {
             Debug.WriteLine($"In rewrite many: {path}");
 
-            if(coyote_exe_path == null)
-            {
-                Debug.WriteError("Please give path of the coyote installation directory. Use coyote-path=<> option");
-                Environment.Exit(1);
-            }
-
             AssemblyAnalyzer.TryLoadAssemblyFrequencyReport(path);
             foreach (var directory in Directory.GetDirectories(path))
             {
@@ -274,10 +391,62 @@ namespace CILAnalyzer
         private static void Rewrite(string directory)
         {
 
+            if (directory.Contains("rewritten")) return;
+
             Debug.WriteLine($"Rewrting the following directory: {directory}");
+
+            if (coyote_bin_path == null)
+            {
+                Debug.WriteError("Please give path of the coyote installation, bin directory. Use coyote-path=<> option");
+                Environment.Exit(1);
+            }
 
             // This directory should contain the rewrite.coyote.json file!
             System.Diagnostics.Debug.Assert(File.Exists(directory+"\\rewrite.coyote.json"));
+
+            string netruntime = "";
+            string version = "";
+
+            // Try open this file! and load the netcore version it use!
+
+            foreach (var (info, file) in InsightsEngine.GetTestProjectInfos(directory))
+            {
+                // Aggregate .NET runtime versions that are used.
+                foreach (var runtimeVersion in info.RuntimeVersions)
+                {
+                    string[] ar = runtimeVersion.Split(',');
+                    netruntime = ar[0];
+                    version = ar[1];
+                    break;
+                }
+            }
+
+            string coyote_build_version = "";
+
+            if (netruntime.ToLower().Contains(".netframework"))
+            {
+                coyote_build_version = "net48";
+            }
+
+            if (netruntime.ToLower().Contains("netcoreapp"))
+            {
+                coyote_build_version = "netcoreapp3.1";
+            }
+
+            if (netruntime.ToLower().Contains("netstandard"))
+            {
+                coyote_build_version = "netstandard2.0";
+            }
+
+            System.Diagnostics.Debug.Assert(coyote_build_version != "");
+
+            string coyote_exe_path = coyote_bin_path + "\\" + coyote_build_version + "\\coyote.exe";
+
+            if(!File.Exists(coyote_exe_path))
+            {
+                Debug.WriteError($"coyote.exe not found in the given path: {coyote_exe_path}");
+                Environment.Exit(1);
+            }
 
             try
             {
@@ -330,7 +499,7 @@ namespace CILAnalyzer
             }
 
             cmd = args[0];
-            if (!(cmd is "analyze" || cmd is "analyze-many" || cmd is "stats" || cmd is "rewrite-many" || cmd is "rewrite" || cmd is "test" || cmd is "test-many"))
+            if (!(cmd is "analyze" || cmd is "analyze-many" || cmd is "stats" || cmd is "rewrite-many" || cmd is "rewrite" || cmd is "test" || cmd is "test-many" || cmd is "test-diff"))
             {
                 Console.Error.WriteLine("Error: unknown tool command, please use [analyze, analyze-many, stats, rewrite, rewrite-many, test, test-many].");
                 Environment.Exit(1);
@@ -374,28 +543,28 @@ namespace CILAnalyzer
                         continue;
                     }
 
-                    if (args[i].Contains("mstest-path"))
+                    if (args[i].Contains("vstest-path"))
                     {
-                        string mstest_path = args[i].Split('=')[1];
+                        string vstest_path = args[i].Split('=')[1];
 
                         // Make sure that this path exists
-                        if (!Directory.Exists(mstest_path))
+                        if (!Directory.Exists(vstest_path))
                         {
-                            Debug.WriteError($"Error: {mstest_path} is not an existing directory.");
+                            Debug.WriteError($"Error: {vstest_path} is not an existing directory.");
                             Environment.Exit(1);
                         }
 
                         // If this directory doesn't contain coyote executable
-                        if (!File.Exists(mstest_path + "\\mstest.exe"))
+                        if (!File.Exists(vstest_path + "\\vstest.console.exe"))
                         {
-                            Debug.WriteError($"Error: mstest.exe not found in this path {mstest_path + "\\mstest.exe"}. Please give the absolute " +
+                            Debug.WriteError($"Error: vstest.console.exe not found in this path {vstest_path + "\\vstest.console.exe"}. Please give the absolute " +
                                                     "path of the directory containing mstest.exe file. " +
-                                                    "Usage: cil-analyzer.exe <test|test-many> <directory> mstest-path=<path_to_mstest_dir>");
+                                                    "Usage: cil-analyzer.exe <test|test-many> <directory> vstest-path=<path_to_vstest_dir>");
 
                             Environment.Exit(1);
                         }
 
-                        mstest_exe_path = Path.GetFullPath(mstest_path);
+                        vstest_exe_path = Path.GetFullPath(vstest_path) + "\\vstest.console.exe";
                     }
 
                     if (args[i].Contains("coyote-path="))
@@ -409,6 +578,7 @@ namespace CILAnalyzer
                             Environment.Exit(1);
                         }
 
+                        /*
                         // If this directory doesn't contain coyote executable
                         if (!File.Exists(coyote_path + "\\coyote.exe"))
                         {
@@ -418,8 +588,9 @@ namespace CILAnalyzer
                             
                             Environment.Exit(1);
                         }
+                        */
 
-                        coyote_exe_path = coyote_path + "\\coyote.exe";
+                        coyote_bin_path = coyote_path;
                     }
                 }
             }
